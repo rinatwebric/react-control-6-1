@@ -4,14 +4,24 @@ import { getRecipes, getRecipeTags } from './entities/recipe/api/recipeApi';
 import { filterAndSortRecipes, type SortOption } from './shared/lib/recipeFilters';
 import { Header } from './widgets/Header/Header';
 import { RecipeCard } from './entities/recipe/ui/RecipeCard';
+import { RecipeModal } from './entities/recipe/ui/RecipeModal';
 import { Input } from './shared/ui/Input/Input';
 import { Select } from './shared/ui/Select/Select';
+import { Button } from './shared/ui/Button/Button';
 
 export function App() {
   const [recipes, setRecipes] = useState<Recipe[]>([]);
   const [tags, setTags] = useState<string[]>([]);
-  const [favorites, setFavorites] = useState<number[]>([]);
+  const [favorites, setFavorites] = useState<number[]>(() => {
+    try {
+      const saved = localStorage.getItem('recipe_favorites');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
   const [currentTab, setCurrentTab] = useState<'catalog' | 'favorites'>('catalog');
+  const [selectedRecipe, setSelectedRecipe] = useState<Recipe | null>(null);
 
   const [search, setSearch] = useState('');
   const [difficulty, setDifficulty] = useState<Difficulty | 'All'>('All');
@@ -27,10 +37,21 @@ export function App() {
     });
   }, []);
 
+  useEffect(() => {
+    try {
+      localStorage.setItem('recipe_favorites', JSON.stringify(favorites));
+    } catch {}
+  }, [favorites]);
+
   const toggleFavorite = (id: number) => {
     setFavorites((prev) =>
       prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
     );
+  };
+
+  const handleSelectRecipe = (id: number) => {
+    const found = recipes.find((r) => r.id === id) || null;
+    setSelectedRecipe(found);
   };
 
   const displayedRecipes = filterAndSortRecipes(
@@ -59,7 +80,7 @@ export function App() {
             onChange={(e) => setSearch(e.target.value)}
           />
 
-          <div className="flex gap-2">
+          <div className="flex flex-wrap sm:flex-nowrap gap-2">
             <Select
               value={difficulty}
               onChange={(e) => setDifficulty(e.target.value as Difficulty | 'All')}
@@ -94,6 +115,24 @@ export function App() {
 
         {loading ? (
           <div className="text-center py-12 text-gray-500">Загрузка рецептов...</div>
+        ) : displayedRecipes.length === 0 ? (
+          <div className="bg-white rounded-lg border p-12 text-center text-gray-500">
+            <p className="text-lg font-medium text-gray-700 mb-1">
+              {currentTab === 'favorites'
+                ? 'У вас пока нет избранных рецептов'
+                : 'Рецепты не найдены'}
+            </p>
+            <p className="text-sm text-gray-500 mb-4">
+              {currentTab === 'favorites'
+                ? 'Добавляйте понравившиеся блюда в избранное из каталога'
+                : 'Попробуйте изменить параметры поиска или фильтров'}
+            </p>
+            {currentTab === 'favorites' && (
+              <Button variant="primary" onClick={() => setCurrentTab('catalog')}>
+                Перейти в каталог
+              </Button>
+            )}
+          </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
             {displayedRecipes.map((recipe) => (
@@ -102,12 +141,19 @@ export function App() {
                 recipe={recipe}
                 isFavorite={favorites.includes(recipe.id)}
                 onToggleFavorite={toggleFavorite}
-                onSelect={(id) => alert(`Открытие деталки рецепта #${id}`)}
+                onSelect={handleSelectRecipe}
               />
             ))}
           </div>
         )}
       </main>
+
+      <RecipeModal
+        recipe={selectedRecipe}
+        onClose={() => setSelectedRecipe(null)}
+        isFavorite={selectedRecipe ? favorites.includes(selectedRecipe.id) : false}
+        onToggleFavorite={toggleFavorite}
+      />
     </div>
   );
 }
